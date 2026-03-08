@@ -7,70 +7,122 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
+<div id="app" class="app">
   <h1>📝 Todo</h1>
 
   <div class="input-row">
-    <input id="new-todo" type="text" placeholder="新しいタスクを入力..." autocomplete="off">
-    <input id="new-due" type="date" title="期限日">
-    <button id="add-btn" title="追加">＋</button>
+    <input id="new-todo" type="text" placeholder="新しいタスクを入力..." autocomplete="off"
+           v-model="newTodo" @keydown.enter="addTodo">
+    <input id="new-due" type="date" title="期限日" v-model="newDue">
+    <button id="add-btn" title="追加" @click="addTodo">＋</button>
   </div>
 
   <div class="stats">
-    <span id="remaining">0件 残り</span>
-    <button id="clear-completed">完了済みを削除</button>
+    <span>{{ activeCount }}件 残り</span>
+    <button id="clear-completed" @click="clearCompleted">完了済みを削除</button>
   </div>
 
   <div class="progress-wrap">
     <div class="progress-header">
       <span>進捗</span>
-      <strong id="progress-pct">0%</strong>
+      <strong id="progress-pct">{{ pct }}%</strong>
     </div>
     <div class="progress-track">
-      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      <div class="progress-fill" :style="{ width: pct + '%' }"></div>
     </div>
   </div>
 
   <div class="filters">
-    <button class="filter-btn active" data-filter="all">
-      すべて<span class="badge" id="badge-all">0</span>
+    <button class="filter-btn" :class="{ active: filter === 'all' }" @click="filter = 'all'">
+      すべて<span class="badge">{{ totalCount }}</span>
     </button>
-    <button class="filter-btn" data-filter="active">
-      未完了<span class="badge" id="badge-active">0</span>
+    <button class="filter-btn" data-filter="active" :class="{ active: filter === 'active' }" @click="filter = 'active'">
+      未完了<span class="badge">{{ activeCount }}</span>
     </button>
-    <button class="filter-btn" data-filter="completed">
-      完了済み<span class="badge" id="badge-completed">0</span>
+    <button class="filter-btn" data-filter="completed" :class="{ active: filter === 'completed' }" @click="filter = 'completed'">
+      完了済み<span class="badge">{{ doneCount }}</span>
     </button>
   </div>
 
   <div class="sort-row">
     <span class="sort-label">並び替え</span>
     <div class="sort-btns">
-      <button class="sort-btn active" data-sort="default">デフォルト</button>
-      <button class="sort-btn" data-sort="due-asc">期限が近い順 ↑</button>
-      <button class="sort-btn" data-sort="due-desc">期限が遠い順 ↓</button>
+      <button class="sort-btn" :class="{ active: sortBy === 'default' }" @click="sortBy = 'default'">デフォルト</button>
+      <button class="sort-btn" :class="{ active: sortBy === 'due-asc' }" @click="sortBy = 'due-asc'">期限が近い順 ↑</button>
+      <button class="sort-btn" :class="{ active: sortBy === 'due-desc' }" @click="sortBy = 'due-desc'">期限が遠い順 ↓</button>
     </div>
   </div>
 
-  <ul id="todo-list"></ul>
-  <p class="empty" id="empty-msg" style="display:none">タスクがありません</p>
-</div>
+  <ul id="todo-list">
+    <li v-for="todo in filteredTodos" :key="todo.id"
+        class="todo-item"
+        :class="{
+          done: todo.done,
+          overdue: isOverdue(todo),
+          dragging: draggingId === todo.id,
+          'drag-over': dragOverId === todo.id
+        }"
+        :draggable="sortBy === 'default'"
+        @dragstart="onDragStart(todo.id)"
+        @dragend="onDragEnd"
+        @dragover.prevent="onDragOver(todo.id)"
+        @dragleave="onDragLeave"
+        @drop.prevent="onDrop(todo.id)">
 
-<!-- Loading modal -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal-box">
-    <div class="spinner"></div>
-    <div class="modal-label">タスクを追加しています…</div>
-    <div class="modal-task-name" id="modal-task-name"></div>
+      <div class="todo-check" @click="toggle(todo)"></div>
+
+      <div class="todo-text-wrap">
+        <span v-if="editingId !== todo.id"
+              class="todo-text"
+              @dblclick="startEdit(todo)">{{ todo.text }}</span>
+        <input v-else
+               class="todo-text todo-edit-input"
+               type="text"
+               :value="editText"
+               v-focus
+               @blur="finishEdit(todo, $event)"
+               @keydown.enter.prevent="$event.target.blur()"
+               @keydown.escape="cancelEdit(todo, $event)">
+      </div>
+
+      <div class="due-tag" :class="{ 'done-tag': todo.done }">
+        <template v-if="todo.due && !todo.done">
+          <span class="due-remaining" :class="formatRemaining(todo.due).cls">
+            {{ formatRemaining(todo.due).text }}
+          </span>
+          <div class="due-tooltip">{{ formatFullDate(todo.due) }}</div>
+        </template>
+        <input type="date"
+               class="due-picker"
+               :class="{ 'no-due': !todo.due }"
+               :value="todo.due || ''"
+               :title="todo.due ? '期限日を変更' : '期限日を設定'"
+               @change="updateDue(todo, $event.target.value)">
+      </div>
+
+      <button class="delete-btn" title="削除" @click="deleteTodo(todo)">✕</button>
+    </li>
+  </ul>
+
+  <p class="empty" v-show="filteredTodos.length === 0">タスクがありません</p>
+
+  <!-- Loading modal -->
+  <div class="modal-overlay" :class="{ visible: showModal }">
+    <div class="modal-box">
+      <div class="spinner"></div>
+      <div class="modal-label">タスクを追加しています…</div>
+      <div class="modal-task-name">{{ modalTaskText }}</div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" :class="{ visible: toastVisible }">
+    <div class="toast-icon">✓</div>
+    <span>{{ toastMessage }}</span>
   </div>
 </div>
 
-<!-- Toast -->
-<div class="toast" id="toast">
-  <div class="toast-icon">✓</div>
-  <span id="toast-msg"></span>
-</div>
-
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

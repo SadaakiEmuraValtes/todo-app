@@ -1,297 +1,200 @@
+const { createApp, ref, computed, watch } = Vue;
+
 const STORAGE_KEY = 'todo-app-v1';
-let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-let filter = 'all';
-let sortBy = 'default';
-let dragSrcIndex = null;
 
-const listEl         = document.getElementById('todo-list');
-const inputEl        = document.getElementById('new-todo');
-const dueEl          = document.getElementById('new-due');
-const addBtn         = document.getElementById('add-btn');
-const remaining      = document.getElementById('remaining');
-const emptyMsg       = document.getElementById('empty-msg');
-const clearBtn       = document.getElementById('clear-completed');
-const badgeAll       = document.getElementById('badge-all');
-const badgeActive    = document.getElementById('badge-active');
-const badgeCompleted = document.getElementById('badge-completed');
-const progressFill   = document.getElementById('progress-fill');
-const progressPct    = document.getElementById('progress-pct');
-const modalOverlay   = document.getElementById('modal-overlay');
-const modalTaskName  = document.getElementById('modal-task-name');
-const toastEl        = document.getElementById('toast');
-const toastMsg       = document.getElementById('toast-msg');
-let toastTimer       = null;
+const app = createApp({
+  setup() {
+    // State
+    const todos       = ref(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+    const filter      = ref('all');
+    const sortBy      = ref('default');
+    const newTodo     = ref('');
+    const newDue      = ref('');
+    const showModal   = ref(false);
+    const modalTaskText = ref('');
+    const toastVisible  = ref(false);
+    const toastMessage  = ref('');
+    const editingId   = ref(null);
+    const editText    = ref('');
+    const draggingId  = ref(null);
+    const dragOverId  = ref(null);
+    let dragSrcId  = null;
+    let toastTimer = null;
 
-function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
-}
+    // Persist to localStorage
+    watch(todos, val => localStorage.setItem(STORAGE_KEY, JSON.stringify(val)), { deep: true });
 
-function dueSortKey(due) {
-  if (!due) return '9999-99-99';  // no due date → always last
-  return due;
-}
+    // Computed stats
+    const totalCount  = computed(() => todos.value.length);
+    const activeCount = computed(() => todos.value.filter(t => !t.done).length);
+    const doneCount   = computed(() => todos.value.filter(t => t.done).length);
+    const pct         = computed(() =>
+      totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
+    );
 
-function filtered() {
-  let result;
-  if (filter === 'active')    result = todos.filter(t => !t.done);
-  else if (filter === 'completed') result = todos.filter(t => t.done);
-  else result = [...todos];
+    // Filtered + sorted list
+    const filteredTodos = computed(() => {
+      let result;
+      if (filter.value === 'active')         result = todos.value.filter(t => !t.done);
+      else if (filter.value === 'completed') result = todos.value.filter(t => t.done);
+      else                                   result = [...todos.value];
 
-  if (sortBy === 'due-asc') {
-    result.sort((a, b) => dueSortKey(a.due).localeCompare(dueSortKey(b.due)));
-  } else if (sortBy === 'due-desc') {
-    result.sort((a, b) => {
-      // No due date always goes last, regardless of direction
-      if (!a.due && !b.due) return 0;
-      if (!a.due) return 1;
-      if (!b.due) return -1;
-      return b.due.localeCompare(a.due);
-    });
-  }
-
-  return result;
-}
-
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function formatFullDate(due) {
-  const [y, m, d] = due.split('-');
-  return `${y}年${parseInt(m)}月${parseInt(d)}日`;
-}
-
-function formatRemaining(due) {
-  if (!due) return null;
-  const now = new Date();
-  const dueEnd = new Date(due + 'T23:59:59');
-  const diffMs = dueEnd - now;
-
-  if (diffMs < 0) return { text: '期限切れ', cls: 'overdue' };
-
-  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const totalDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (totalDays >= 7) {
-    const weeks = Math.floor(totalDays / 7);
-    return { text: `${weeks}週間`, cls: 'upcoming' };
-  } else if (totalDays >= 1) {
-    const cls = totalDays <= 2 ? 'warn' : 'upcoming';
-    return { text: `${totalDays}日`, cls };
-  } else if (totalHours >= 1) {
-    return { text: `${totalHours}時間`, cls: 'today' };
-  } else {
-    return { text: 'まもなく', cls: 'today' };
-  }
-}
-
-function render() {
-  const visible = filtered();
-  listEl.innerHTML = '';
-
-  visible.forEach((todo) => {
-    const realIndex = todos.indexOf(todo);
-    const today = todayStr();
-    const isOverdue = todo.due && !todo.done && todo.due < today;
-
-    const li = document.createElement('li');
-    li.className = 'todo-item' + (todo.done ? ' done' : '') + (isOverdue ? ' overdue' : '');
-    li.draggable = true;
-    li.dataset.index = realIndex;
-
-    const check = document.createElement('div');
-    check.className = 'todo-check';
-    check.addEventListener('click', () => toggle(realIndex));
-
-    const textWrap = document.createElement('div');
-    textWrap.className = 'todo-text-wrap';
-
-    const text = document.createElement('span');
-    text.className = 'todo-text';
-    text.textContent = todo.text;
-
-    // Double-click to edit
-    text.addEventListener('dblclick', () => {
-      text.contentEditable = 'true';
-      text.focus();
-      const range = document.createRange();
-      range.selectNodeContents(text);
-      window.getSelection().removeAllRanges();
-      window.getSelection().addRange(range);
-    });
-
-    text.addEventListener('blur', () => {
-      text.contentEditable = 'false';
-      const newText = text.textContent.trim();
-      if (newText) {
-        todos[realIndex].text = newText;
-      } else {
-        todos.splice(realIndex, 1);
+      if (sortBy.value === 'due-asc') {
+        result.sort((a, b) => (a.due || '9999-99-99').localeCompare(b.due || '9999-99-99'));
+      } else if (sortBy.value === 'due-desc') {
+        result.sort((a, b) => {
+          if (!a.due && !b.due) return 0;
+          if (!a.due) return 1;
+          if (!b.due) return -1;
+          return b.due.localeCompare(a.due);
+        });
       }
-      save();
-      render();
+      return result;
     });
 
-    text.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); text.blur(); }
-      if (e.key === 'Escape') {
-        text.textContent = todos[realIndex].text;
-        text.blur();
-      }
-    });
-
-    textWrap.appendChild(text);
-
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.textContent = '✕';
-    del.title = '削除';
-    del.addEventListener('click', () => {
-      todos.splice(realIndex, 1);
-      save(); render();
-    });
-
-    li.appendChild(check);
-    li.appendChild(textWrap);
-
-    // Due tag (always shown for setting/showing due date)
-    const dueTag = document.createElement('div');
-    dueTag.className = 'due-tag' + (todo.done ? ' done-tag' : '');
-
-    if (todo.due && !todo.done) {
-      const rem = formatRemaining(todo.due);
-
-      const remSpan = document.createElement('span');
-      remSpan.className = `due-remaining ${rem.cls}`;
-      remSpan.textContent = rem.text;
-      dueTag.appendChild(remSpan);
-
-      const tooltip = document.createElement('div');
-      tooltip.className = 'due-tooltip';
-      tooltip.textContent = formatFullDate(todo.due);
-      dueTag.appendChild(tooltip);
+    // Helpers
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
-    const duePicker = document.createElement('input');
-    duePicker.type = 'date';
-    duePicker.className = 'due-picker' + (!todo.due ? ' no-due' : '');
-    duePicker.value = todo.due || '';
-    duePicker.title = todo.due ? '期限日を変更' : '期限日を設定';
-    duePicker.addEventListener('change', () => {
-      todos[realIndex].due = duePicker.value || null;
-      save(); render();
-    });
-    dueTag.appendChild(duePicker);
+    function isOverdue(todo) {
+      return todo.due && !todo.done && todo.due < todayStr();
+    }
 
-    li.appendChild(dueTag);
-    li.appendChild(del);
+    function formatFullDate(due) {
+      const [y, m, d] = due.split('-');
+      return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+    }
 
-    // Drag events (disabled when sorting)
-    li.draggable = sortBy === 'default';
-    li.addEventListener('dragstart', () => {
-      if (sortBy !== 'default') return;
-      dragSrcIndex = realIndex;
-      setTimeout(() => li.classList.add('dragging'), 0);
-    });
-    li.addEventListener('dragend', () => li.classList.remove('dragging'));
-    li.addEventListener('dragover', (e) => {
-      if (sortBy !== 'default') return;
-      e.preventDefault(); li.classList.add('drag-over');
-    });
-    li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
-    li.addEventListener('drop', (e) => {
-      if (sortBy !== 'default') return;
-      e.preventDefault();
-      li.classList.remove('drag-over');
-      const targetIndex = parseInt(li.dataset.index);
-      if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
-      const [moved] = todos.splice(dragSrcIndex, 1);
-      todos.splice(targetIndex, 0, moved);
-      dragSrcIndex = null;
-      save(); render();
-    });
+    function formatRemaining(due) {
+      if (!due) return { text: '', cls: '' };
+      const diffMs     = new Date(due + 'T23:59:59') - new Date();
+      if (diffMs < 0)  return { text: '期限切れ', cls: 'overdue' };
+      const totalHours = Math.floor(diffMs / 3600000);
+      const totalDays  = Math.floor(diffMs / 86400000);
+      if (totalDays >= 7) return { text: `${Math.floor(totalDays / 7)}週間`, cls: 'upcoming' };
+      if (totalDays >= 1) return { text: `${totalDays}日`, cls: totalDays <= 2 ? 'warn' : 'upcoming' };
+      if (totalHours >= 1) return { text: `${totalHours}時間`, cls: 'today' };
+      return { text: 'まもなく', cls: 'today' };
+    }
 
-    listEl.appendChild(li);
-  });
+    function showToastMsg(msg) {
+      toastMessage.value = msg;
+      toastVisible.value = true;
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toastVisible.value = false; }, 2500);
+    }
 
-  const totalCount    = todos.length;
-  const activeCount   = todos.filter(t => !t.done).length;
-  const doneCount     = todos.filter(t => t.done).length;
-  const pct           = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+    // Actions
+    async function addTodo() {
+      const text = newTodo.value.trim();
+      if (!text) return;
+      modalTaskText.value = `「${text}」`;
+      showModal.value = true;
+      newTodo.value = '';
+      await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+      const due = newDue.value || null;
+      newDue.value = '';
+      todos.value.unshift({ id: Date.now(), text, due, done: false });
+      showModal.value = false;
+      showToastMsg(`「${text}」を追加しました`);
+    }
 
-  remaining.textContent     = `${activeCount}件 残り`;
-  badgeAll.textContent       = totalCount;
-  badgeActive.textContent    = activeCount;
-  badgeCompleted.textContent = doneCount;
-  progressFill.style.width   = pct + '%';
-  progressPct.textContent    = pct + '%';
-  emptyMsg.style.display     = visible.length === 0 ? 'block' : 'none';
-}
+    function toggle(todo) {
+      todo.done = !todo.done;
+    }
 
-function showToast(msg) {
-  toastMsg.textContent = msg;
-  toastEl.classList.add('visible');
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 2500);
-}
+    function deleteTodo(todo) {
+      const i = todos.value.indexOf(todo);
+      if (i !== -1) todos.value.splice(i, 1);
+    }
 
-async function addTodo() {
-  const text = inputEl.value.trim();
-  if (!text) return;
+    function clearCompleted() {
+      todos.value = todos.value.filter(t => !t.done);
+    }
 
-  // Show loading modal
-  modalTaskName.textContent = `「${text}」`;
-  modalOverlay.classList.add('visible');
-  inputEl.value = '';
+    function updateDue(todo, value) {
+      todo.due = value || null;
+    }
 
-  // Simulate 2–3 second processing
-  const delay = 2000 + Math.random() * 1000;
-  await new Promise(resolve => setTimeout(resolve, delay));
+    // Inline editing
+    function startEdit(todo) {
+      editText.value  = todo.text;
+      editingId.value = todo.id;
+    }
 
-  // Actually add the todo
-  const due = dueEl.value || null;
-  dueEl.value = '';
-  todos.unshift({ id: Date.now(), text, due, done: false });
-  save();
-  render();
+    function finishEdit(todo, e) {
+      if (editingId.value !== todo.id) return;
+      const newText = e.target.value.trim();
+      editingId.value = null;
+      if (newText) {
+        todo.text = newText;
+      } else {
+        deleteTodo(todo);
+      }
+    }
 
-  // Hide modal
-  modalOverlay.classList.remove('visible');
+    function cancelEdit(todo, e) {
+      editingId.value = null;
+      e.target.blur();
+    }
 
-  // Show success toast
-  showToast(`「${text}」を追加しました`);
-}
+    // Drag & drop
+    function onDragStart(id) {
+      if (sortBy.value !== 'default') return;
+      dragSrcId       = id;
+      draggingId.value = id;
+    }
 
-function toggle(index) {
-  todos[index].done = !todos[index].done;
-  save(); render();
-}
+    function onDragEnd() {
+      draggingId.value = null;
+      dragOverId.value  = null;
+    }
 
-addBtn.addEventListener('click', addTodo);
-inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+    function onDragOver(id) {
+      if (sortBy.value !== 'default') return;
+      dragOverId.value = id;
+    }
 
-clearBtn.addEventListener('click', () => {
-  todos = todos.filter(t => !t.done);
-  save(); render();
+    function onDragLeave() {
+      dragOverId.value = null;
+    }
+
+    function onDrop(targetId) {
+      if (sortBy.value !== 'default' || !dragSrcId || dragSrcId === targetId) return;
+      dragOverId.value  = null;
+      draggingId.value  = null;
+      const srcIdx = todos.value.findIndex(t => t.id === dragSrcId);
+      const tgtIdx = todos.value.findIndex(t => t.id === targetId);
+      if (srcIdx !== -1 && tgtIdx !== -1) {
+        const [moved] = todos.value.splice(srcIdx, 1);
+        todos.value.splice(tgtIdx, 0, moved);
+      }
+      dragSrcId = null;
+    }
+
+    return {
+      todos, filter, sortBy, newTodo, newDue,
+      showModal, modalTaskText,
+      toastVisible, toastMessage,
+      editingId, editText,
+      draggingId, dragOverId,
+      totalCount, activeCount, doneCount, pct, filteredTodos,
+      isOverdue, formatFullDate, formatRemaining,
+      addTodo, toggle, deleteTodo, clearCompleted, updateDue,
+      startEdit, finishEdit, cancelEdit,
+      onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
+    };
+  }
 });
 
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    filter = btn.dataset.filter;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    render();
-  });
+// カスタムディレクティブ: v-focus (インライン編集時に自動フォーカス+全選択)
+app.directive('focus', {
+  mounted(el) {
+    el.focus();
+    el.select();
+  }
 });
 
-document.querySelectorAll('.sort-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    sortBy = btn.dataset.sort;
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    render();
-  });
-});
-
-render();
+app.mount('#app');

@@ -278,6 +278,51 @@ h1 {
   text-decoration: none;
 }
 
+/* Sort row */
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.sort-label {
+  font-size: 0.8rem;
+  color: #999;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sort-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sort-btn {
+  padding: 4px 10px;
+  border: 1.5px solid #e0e0e0;
+  background: #fff;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sort-btn:hover {
+  border-color: #6c63ff;
+  color: #6c63ff;
+}
+
+.sort-btn.active {
+  background: #6c63ff;
+  border-color: #6c63ff;
+  color: #fff;
+  font-weight: 600;
+}
+
 /* Due tag (right side of task) */
 .due-tag {
   position: relative;

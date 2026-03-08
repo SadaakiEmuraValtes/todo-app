@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'todo-app-v1';
 let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let filter = 'all';
+let sortBy = 'default';
 let dragSrcIndex = null;
 
 const listEl         = document.getElementById('todo-list');
@@ -25,10 +26,30 @@ function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
 }
 
+function dueSortKey(due) {
+  if (!due) return '9999-99-99';  // no due date → always last
+  return due;
+}
+
 function filtered() {
-  if (filter === 'active')    return todos.filter(t => !t.done);
-  if (filter === 'completed') return todos.filter(t => t.done);
-  return todos;
+  let result;
+  if (filter === 'active')    result = todos.filter(t => !t.done);
+  else if (filter === 'completed') result = todos.filter(t => t.done);
+  else result = [...todos];
+
+  if (sortBy === 'due-asc') {
+    result.sort((a, b) => dueSortKey(a.due).localeCompare(dueSortKey(b.due)));
+  } else if (sortBy === 'due-desc') {
+    result.sort((a, b) => {
+      // No due date always goes last, regardless of direction
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return b.due.localeCompare(a.due);
+    });
+  }
+
+  return result;
 }
 
 function todayStr() {
@@ -181,15 +202,21 @@ function render() {
 
     li.appendChild(del);
 
-    // Drag events
+    // Drag events (disabled when sorting)
+    li.draggable = sortBy === 'default';
     li.addEventListener('dragstart', () => {
+      if (sortBy !== 'default') return;
       dragSrcIndex = realIndex;
       setTimeout(() => li.classList.add('dragging'), 0);
     });
     li.addEventListener('dragend', () => li.classList.remove('dragging'));
-    li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('drag-over'); });
+    li.addEventListener('dragover', (e) => {
+      if (sortBy !== 'default') return;
+      e.preventDefault(); li.classList.add('drag-over');
+    });
     li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
     li.addEventListener('drop', (e) => {
+      if (sortBy !== 'default') return;
       e.preventDefault();
       li.classList.remove('drag-over');
       const targetIndex = parseInt(li.dataset.index);
@@ -268,6 +295,15 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     filter = btn.dataset.filter;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  });
+});
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sortBy = btn.dataset.sort;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     render();
   });

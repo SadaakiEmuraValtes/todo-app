@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 24px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Input area */
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    #new-todo {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #fff;
+    }
+
+    #new-todo:focus { border-color: #6c63ff; }
+
+    #add-btn {
+      padding: 12px 20px;
+      background: #6c63ff;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.4rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    #add-btn:hover { background: #574fd6; }
+    #add-btn:active { transform: scale(0.95); }
+
+    /* Stats */
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+
+    #clear-completed {
+      background: none;
+      border: none;
+      color: #e74c3c;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+
+    #clear-completed:hover { background: #fdecea; }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-bottom: 14px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #999;
+      margin-bottom: 5px;
+    }
+
+    .progress-header strong {
+      color: #6c63ff;
+      font-size: 0.9rem;
+    }
+
+    .progress-track {
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6c63ff, #a78bfa);
+      border-radius: 99px;
+      transition: width 0.4s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* Filter tabs */
+    .filters {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      background: #e8e8f0;
+      border-radius: 10px;
+      padding: 4px;
+    }
+
+    .filter-btn {
+      flex: 1;
+      padding: 8px 4px;
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #666;
+      transition: background 0.2s, color 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      line-height: 1;
+    }
+
+    .filter-btn.active {
+      background: #fff;
+      color: #6c63ff;
+      font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    .filter-btn .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 99px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      background: #e0e0ee;
+      color: #888;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .filter-btn.active .badge {
+      background: #6c63ff;
+      color: #fff;
+    }
+
+    .filter-btn[data-filter="active"] .badge   { background: #e8f5e9; color: #43a047; }
+    .filter-btn[data-filter="active"].active .badge { background: #43a047; color: #fff; }
+    .filter-btn[data-filter="completed"] .badge { background: #ede7f6; color: #7e57c2; }
+    .filter-btn[data-filter="completed"].active .badge { background: #7e57c2; color: #fff; }
+
+    /* Todo list */
+    #todo-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      cursor: grab;
+      user-select: none;
+      transition: opacity 0.2s, box-shadow 0.2s;
+      animation: slideIn 0.2s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .todo-item.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+      box-shadow: 0 6px 20px rgba(108,99,255,0.25);
+    }
+
+    .todo-item.drag-over {
+      border: 2px dashed #6c63ff;
+    }
+
+    /* Checkbox */
+    .todo-check {
+      width: 22px;
+      height: 22px;
+      border: 2px solid #ccc;
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .todo-item.done .todo-check {
+      background: #6c63ff;
+      border-color: #6c63ff;
+    }
+
+    .todo-item.done .todo-check::after {
+      content: '✓';
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    /* Text */
+    .todo-text {
+      flex: 1;
+      font-size: 1rem;
+      color: #333;
+      word-break: break-word;
+      transition: color 0.2s;
+      outline: none;
+    }
+
+    .todo-item.done .todo-text {
+      color: #aaa;
+      text-decoration: line-through;
+    }
+
+    .todo-text[contenteditable="true"] {
+      border-bottom: 1px dashed #6c63ff;
+      color: #333;
+      text-decoration: none;
+    }
+
+    /* Delete button */
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: color 0.2s, opacity 0.2s;
+      flex-shrink: 0;
+    }
+
+    .todo-item:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { color: #e74c3c; }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      color: #bbb;
+      padding: 40px 0;
+      font-size: 0.95rem;
+    }
+
+    /* Loading modal overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(20, 18, 40, 0.45);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .modal-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      transform: scale(0.9);
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+
+    .modal-overlay.visible .modal-box {
+      transform: scale(1);
+    }
+
+    .spinner {
+      width: 52px;
+      height: 52px;
+      border: 5px solid #e8e8f0;
+      border-top-color: #6c63ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .modal-label {
+      font-size: 1rem;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .modal-task-name {
+      font-size: 0.9rem;
+      color: #6c63ff;
+      font-weight: 700;
+      max-width: 240px;
+      text-align: center;
+      word-break: break-word;
+      background: #f0eeff;
+      padding: 4px 12px;
+      border-radius: 99px;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1a2e;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 99px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s cubic-bezier(.4,0,.2,1);
+      z-index: 999;
+      white-space: nowrap;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast-icon {
+      width: 20px;
+      height: 20px;
+      background: #6c63ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>📝 Todo</h1>
+
+  <div class="input-row">
+    <input id="new-todo" type="text" placeholder="新しいタスクを入力..." autocomplete="off">
+    <button id="add-btn" title="追加">＋</button>
+  </div>
+
+  <div class="stats">
+    <span id="remaining">0件 残り</span>
+    <button id="clear-completed">完了済みを削除</button>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-header">
+      <span>進捗</span>
+      <strong id="progress-pct">0%</strong>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" data-filter="all">
+      すべて<span class="badge" id="badge-all">0</span>
+    </button>
+    <button class="filter-btn" data-filter="active">
+      未完了<span class="badge" id="badge-active">0</span>
+    </button>
+    <button class="filter-btn" data-filter="completed">
+      完了済み<span class="badge" id="badge-completed">0</span>
+    </button>
+  </div>
+
+  <ul id="todo-list"></ul>
+  <p class="empty" id="empty-msg" style="display:none">タスクがありません</p>
+</div>
+
+<!-- Loading modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="spinner"></div>
+    <div class="modal-label">タスクを追加しています…</div>
+    <div class="modal-task-name" id="modal-task-name"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <div class="toast-icon">✓</div>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+  const STORAGE_KEY = 'todo-app-v1';
+  let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let filter = 'all';
+  let dragSrcIndex = null;
+
+  const listEl         = document.getElementById('todo-list');
+  const inputEl        = document.getElementById('new-todo');
+  const addBtn         = document.getElementById('add-btn');
+  const remaining      = document.getElementById('remaining');
+  const emptyMsg       = document.getElementById('empty-msg');
+  const clearBtn       = document.getElementById('clear-completed');
+  const badgeAll       = document.getElementById('badge-all');
+  const badgeActive    = document.getElementById('badge-active');
+  const badgeCompleted = document.getElementById('badge-completed');
+  const progressFill   = document.getElementById('progress-fill');
+  const progressPct    = document.getElementById('progress-pct');
+  const modalOverlay   = document.getElementById('modal-overlay');
+  const modalTaskName  = document.getElementById('modal-task-name');
+  const toastEl        = document.getElementById('toast');
+  const toastMsg       = document.getElementById('toast-msg');
+  let toastTimer       = null;
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  }
+
+  function filtered() {
+    if (filter === 'active')    return todos.filter(t => !t.done);
+    if (filter === 'completed') return todos.filter(t => t.done);
+    return todos;
+  }
+
+  function render() {
+    const visible = filtered();
+    listEl.innerHTML = '';
+
+    visible.forEach((todo) => {
+      const realIndex = todos.indexOf(todo);
+      const li = document.createElement('li');
+      li.className = 'todo-item' + (todo.done ? ' done' : '');
+      li.draggable = true;
+      li.dataset.index = realIndex;
+
+      const check = document.createElement('div');
+      check.className = 'todo-check';
+      check.addEventListener('click', () => toggle(realIndex));
+
+      const text = document.createElement('span');
+      text.className = 'todo-text';
+      text.textContent = todo.text;
+
+      // Double-click to edit
+      text.addEventListener('dblclick', () => {
+        text.contentEditable = 'true';
+        text.focus();
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      });
+
+      text.addEventListener('blur', () => {
+        text.contentEditable = 'false';
+        const newText = text.textContent.trim();
+        if (newText) {
+          todos[realIndex].text = newText;
+        } else {
+          todos.splice(realIndex, 1);
+        }
+        save();
+        render();
+      });
+
+      text.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); text.blur(); }
+        if (e.key === 'Escape') {
+          text.textContent = todos[realIndex].text;
+          text.blur();
+        }
+      });
+
+      const del = document.createElement('button');
+      del.className = 'delete-btn';
+      del.textContent = '✕';
+      del.title = '削除';
+      del.addEventListener('click', () => {
+        todos.splice(realIndex, 1);
+        save(); render();
+      });
+
+      li.appendChild(check);
+      li.appendChild(text);
+      li.appendChild(del);
+
+      // Drag events
+      li.addEventListener('dragstart', () => {
+        dragSrcIndex = realIndex;
+        setTimeout(() => li.classList.add('dragging'), 0);
+      });
+      li.addEventListener('dragend', () => li.classList.remove('dragging'));
+      li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('drag-over'); });
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        li.classList.remove('drag-over');
+        const targetIndex = parseInt(li.dataset.index);
+        if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+        const [moved] = todos.splice(dragSrcIndex, 1);
+        todos.splice(targetIndex, 0, moved);
+        dragSrcIndex = null;
+        save(); render();
+      });
+
+      listEl.appendChild(li);
+    });
+
+    const totalCount    = todos.length;
+    const activeCount   = todos.filter(t => !t.done).length;
+    const doneCount     = todos.filter(t => t.done).length;
+    const pct           = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+
+    remaining.textContent     = `${activeCount}件 残り`;
+    badgeAll.textContent       = totalCount;
+    badgeActive.textContent    = activeCount;
+    badgeCompleted.textContent = doneCount;
+    progressFill.style.width   = pct + '%';
+    progressPct.textContent    = pct + '%';
+    emptyMsg.style.display     = visible.length === 0 ? 'block' : 'none';
+  }
+
+  function showToast(msg) {
+    toastMsg.textContent = msg;
+    toastEl.classList.add('visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 2500);
+  }
+
+  async function addTodo() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    // Show loading modal
+    modalTaskName.textContent = `「${text}」`;
+    modalOverlay.classList.add('visible');
+    inputEl.value = '';
+
+    // Simulate 2–3 second processing
+    const delay = 2000 + Math.random() * 1000;
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    // Actually add the todo
+    todos.unshift({ id: Date.now(), text, done: false });
+    save();
+    render();
+
+    // Hide modal
+    modalOverlay.classList.remove('visible');
+
+    // Show success toast
+    showToast(`「${text}」を追加しました`);
+  }
+
+  function toggle(index) {
+    todos[index].done = !todos[index].done;
+    save(); render();
+  }
+
+  addBtn.addEventListener('click', addTodo);
+  inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+
+  clearBtn.addEventListener('click', () => {
+    todos = todos.filter(t => !t.done);
+    save(); render();
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filter = btn.dataset.filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

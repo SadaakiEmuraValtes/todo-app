@@ -5,6 +5,7 @@ let dragSrcIndex = null;
 
 const listEl         = document.getElementById('todo-list');
 const inputEl        = document.getElementById('new-todo');
+const dueEl          = document.getElementById('new-due');
 const addBtn         = document.getElementById('add-btn');
 const remaining      = document.getElementById('remaining');
 const emptyMsg       = document.getElementById('empty-msg');
@@ -30,20 +31,47 @@ function filtered() {
   return todos;
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dueBadge(due, done) {
+  if (!due || done) return null;
+  const today = todayStr();
+  const span = document.createElement('span');
+  if (due < today) {
+    span.className = 'due-badge overdue';
+    span.textContent = '期限切れ';
+  } else if (due === today) {
+    span.className = 'due-badge today';
+    span.textContent = '今日まで';
+  } else {
+    span.className = 'due-badge upcoming';
+    span.textContent = due.replace(/-/g, '/');
+  }
+  return span;
+}
+
 function render() {
   const visible = filtered();
   listEl.innerHTML = '';
 
   visible.forEach((todo) => {
     const realIndex = todos.indexOf(todo);
+    const today = todayStr();
+    const isOverdue = todo.due && !todo.done && todo.due < today;
+
     const li = document.createElement('li');
-    li.className = 'todo-item' + (todo.done ? ' done' : '');
+    li.className = 'todo-item' + (todo.done ? ' done' : '') + (isOverdue ? ' overdue' : '');
     li.draggable = true;
     li.dataset.index = realIndex;
 
     const check = document.createElement('div');
     check.className = 'todo-check';
     check.addEventListener('click', () => toggle(realIndex));
+
+    const textWrap = document.createElement('div');
+    textWrap.className = 'todo-text-wrap';
 
     const text = document.createElement('span');
     text.className = 'todo-text';
@@ -79,6 +107,27 @@ function render() {
       }
     });
 
+    textWrap.appendChild(text);
+
+    // Due date row
+    const dueRow = document.createElement('div');
+    dueRow.className = 'due-row';
+
+    const badge = dueBadge(todo.due, todo.done);
+    if (badge) dueRow.appendChild(badge);
+
+    // Inline date picker (click on badge/calendar icon)
+    const duePicker = document.createElement('input');
+    duePicker.type = 'date';
+    duePicker.className = 'due-picker';
+    duePicker.value = todo.due || '';
+    duePicker.addEventListener('change', () => {
+      todos[realIndex].due = duePicker.value || null;
+      save(); render();
+    });
+    dueRow.appendChild(duePicker);
+    textWrap.appendChild(dueRow);
+
     const del = document.createElement('button');
     del.className = 'delete-btn';
     del.textContent = '✕';
@@ -89,7 +138,7 @@ function render() {
     });
 
     li.appendChild(check);
-    li.appendChild(text);
+    li.appendChild(textWrap);
     li.appendChild(del);
 
     // Drag events
@@ -149,7 +198,9 @@ async function addTodo() {
   await new Promise(resolve => setTimeout(resolve, delay));
 
   // Actually add the todo
-  todos.unshift({ id: Date.now(), text, done: false });
+  const due = dueEl.value || null;
+  dueEl.value = '';
+  todos.unshift({ id: Date.now(), text, due, done: false });
   save();
   render();
 

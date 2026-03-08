@@ -35,21 +35,33 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function dueBadge(due, done) {
-  if (!due || done) return null;
-  const today = todayStr();
-  const span = document.createElement('span');
-  if (due < today) {
-    span.className = 'due-badge overdue';
-    span.textContent = '期限切れ';
-  } else if (due === today) {
-    span.className = 'due-badge today';
-    span.textContent = '今日まで';
+function formatFullDate(due) {
+  const [y, m, d] = due.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+}
+
+function formatRemaining(due) {
+  if (!due) return null;
+  const now = new Date();
+  const dueEnd = new Date(due + 'T23:59:59');
+  const diffMs = dueEnd - now;
+
+  if (diffMs < 0) return { text: '期限切れ', cls: 'overdue' };
+
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const totalDays  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (totalDays >= 7) {
+    const weeks = Math.floor(totalDays / 7);
+    return { text: `${weeks}週間`, cls: 'upcoming' };
+  } else if (totalDays >= 1) {
+    const cls = totalDays <= 2 ? 'warn' : 'upcoming';
+    return { text: `${totalDays}日`, cls };
+  } else if (totalHours >= 1) {
+    return { text: `${totalHours}時間`, cls: 'today' };
   } else {
-    span.className = 'due-badge upcoming';
-    span.textContent = due.replace(/-/g, '/');
+    return { text: 'まもなく', cls: 'today' };
   }
-  return span;
 }
 
 function render() {
@@ -109,25 +121,6 @@ function render() {
 
     textWrap.appendChild(text);
 
-    // Due date row
-    const dueRow = document.createElement('div');
-    dueRow.className = 'due-row';
-
-    const badge = dueBadge(todo.due, todo.done);
-    if (badge) dueRow.appendChild(badge);
-
-    // Inline date picker (click on badge/calendar icon)
-    const duePicker = document.createElement('input');
-    duePicker.type = 'date';
-    duePicker.className = 'due-picker';
-    duePicker.value = todo.due || '';
-    duePicker.addEventListener('change', () => {
-      todos[realIndex].due = duePicker.value || null;
-      save(); render();
-    });
-    dueRow.appendChild(duePicker);
-    textWrap.appendChild(dueRow);
-
     const del = document.createElement('button');
     del.className = 'delete-btn';
     del.textContent = '✕';
@@ -139,6 +132,53 @@ function render() {
 
     li.appendChild(check);
     li.appendChild(textWrap);
+
+    // Due tag (right side)
+    if (todo.due && !todo.done) {
+      const rem = formatRemaining(todo.due);
+
+      const dueTag = document.createElement('div');
+      dueTag.className = 'due-tag';
+
+      const remSpan = document.createElement('span');
+      remSpan.className = `due-remaining ${rem.cls}`;
+      remSpan.textContent = rem.text;
+
+      // Calendar icon picker
+      const duePicker = document.createElement('input');
+      duePicker.type = 'date';
+      duePicker.className = 'due-picker';
+      duePicker.value = todo.due;
+      duePicker.addEventListener('change', () => {
+        todos[realIndex].due = duePicker.value || null;
+        save(); render();
+      });
+
+      // Floating tooltip: full date
+      const tooltip = document.createElement('div');
+      tooltip.className = 'due-tooltip';
+      tooltip.textContent = formatFullDate(todo.due);
+
+      dueTag.appendChild(remSpan);
+      dueTag.appendChild(duePicker);
+      dueTag.appendChild(tooltip);
+      li.appendChild(dueTag);
+    } else if (todo.due && todo.done) {
+      // Completed: just show picker icon to allow date removal
+      const dueTag = document.createElement('div');
+      dueTag.className = 'due-tag done-tag';
+      const duePicker = document.createElement('input');
+      duePicker.type = 'date';
+      duePicker.className = 'due-picker';
+      duePicker.value = todo.due;
+      duePicker.addEventListener('change', () => {
+        todos[realIndex].due = duePicker.value || null;
+        save(); render();
+      });
+      dueTag.appendChild(duePicker);
+      li.appendChild(dueTag);
+    }
+
     li.appendChild(del);
 
     // Drag events

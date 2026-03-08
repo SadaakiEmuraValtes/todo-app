@@ -278,50 +278,91 @@ h1 {
   text-decoration: none;
 }
 
-/* Due date row */
-.due-row {
+/* Due tag (right side of task) */
+.due-tag {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
-.due-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.72rem;
+.due-remaining {
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 99px;
+  white-space: nowrap;
 }
 
-.due-badge.overdue {
-  background: #fdecea;
-  color: #e53935;
+.due-remaining.overdue  { background: #fdecea; color: #e53935; }
+.due-remaining.today    { background: #fff3e0; color: #e65100; }
+.due-remaining.warn     { background: #fff8e1; color: #f9a825; }
+.due-remaining.upcoming { background: #e8f5e9; color: #2e7d32; }
+
+/* Floating tooltip: full date */
+.due-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
 }
 
-.due-badge.today {
-  background: #fff8e1;
-  color: #f9a825;
+.due-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1a2e;
 }
 
-.due-badge.upcoming {
-  background: #e8f5e9;
-  color: #2e7d32;
+.todo-item:hover .due-tooltip,
+.todo-item:focus-within .due-tooltip {
+  opacity: 1;
 }
 
+/* Date picker icon only */
 .due-picker {
   border: none;
   background: transparent;
-  font-size: 0.75rem;
-  color: #aaa;
+  font-size: 0;
+  color: transparent;
   cursor: pointer;
   padding: 0;
   outline: none;
+  width: 18px;
+  height: 18px;
 }
 
 .due-picker::-webkit-calendar-picker-indicator {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: pointer;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.due-picker:hover::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+}
+
+.done-tag .due-picker::-webkit-calendar-picker-indicator {
+  opacity: 0.2;
 }
 
 /* Overdue item border */

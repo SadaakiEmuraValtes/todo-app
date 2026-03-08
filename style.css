@@ -403,7 +403,16 @@ h1 {
 }
 
 .due-picker:hover::-webkit-calendar-picker-indicator {
-  opacity: 0.7;
+  opacity: 0.8;
+}
+
+/* No due date set: icon very faint, becomes visible on hover */
+.due-picker.no-due::-webkit-calendar-picker-indicator {
+  opacity: 0.15;
+}
+
+.todo-item:hover .due-picker.no-due::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
 }
 
 .done-tag .due-picker::-webkit-calendar-picker-indicator {

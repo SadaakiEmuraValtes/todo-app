@@ -53,7 +53,8 @@ function filtered() {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function formatFullDate(due) {
@@ -154,52 +155,36 @@ function render() {
     li.appendChild(check);
     li.appendChild(textWrap);
 
-    // Due tag (right side)
+    // Due tag (always shown for setting/showing due date)
+    const dueTag = document.createElement('div');
+    dueTag.className = 'due-tag' + (todo.done ? ' done-tag' : '');
+
     if (todo.due && !todo.done) {
       const rem = formatRemaining(todo.due);
-
-      const dueTag = document.createElement('div');
-      dueTag.className = 'due-tag';
 
       const remSpan = document.createElement('span');
       remSpan.className = `due-remaining ${rem.cls}`;
       remSpan.textContent = rem.text;
+      dueTag.appendChild(remSpan);
 
-      // Calendar icon picker
-      const duePicker = document.createElement('input');
-      duePicker.type = 'date';
-      duePicker.className = 'due-picker';
-      duePicker.value = todo.due;
-      duePicker.addEventListener('change', () => {
-        todos[realIndex].due = duePicker.value || null;
-        save(); render();
-      });
-
-      // Floating tooltip: full date
       const tooltip = document.createElement('div');
       tooltip.className = 'due-tooltip';
       tooltip.textContent = formatFullDate(todo.due);
-
-      dueTag.appendChild(remSpan);
-      dueTag.appendChild(duePicker);
       dueTag.appendChild(tooltip);
-      li.appendChild(dueTag);
-    } else if (todo.due && todo.done) {
-      // Completed: just show picker icon to allow date removal
-      const dueTag = document.createElement('div');
-      dueTag.className = 'due-tag done-tag';
-      const duePicker = document.createElement('input');
-      duePicker.type = 'date';
-      duePicker.className = 'due-picker';
-      duePicker.value = todo.due;
-      duePicker.addEventListener('change', () => {
-        todos[realIndex].due = duePicker.value || null;
-        save(); render();
-      });
-      dueTag.appendChild(duePicker);
-      li.appendChild(dueTag);
     }
 
+    const duePicker = document.createElement('input');
+    duePicker.type = 'date';
+    duePicker.className = 'due-picker' + (!todo.due ? ' no-due' : '');
+    duePicker.value = todo.due || '';
+    duePicker.title = todo.due ? '期限日を変更' : '期限日を設定';
+    duePicker.addEventListener('change', () => {
+      todos[realIndex].due = duePicker.value || null;
+      save(); render();
+    });
+    dueTag.appendChild(duePicker);
+
+    li.appendChild(dueTag);
     li.appendChild(del);
 
     // Drag events (disabled when sorting)
